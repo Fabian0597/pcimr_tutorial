@@ -9,23 +9,6 @@ from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Point
 from pcimr_simulation.srv import InitPos
 
-"""
-def callback_pos(data):
-	rospy.loginfo(data.x)
-	
-def callback_scan(data):
-	rospy.loginfo(data.range_min)
-	
-def listener():
-	rospy.Subscriber('/robot_pos', Point, callback_pos)
-	rospy.Subscriber('/scan', LaserScan, callback_scan)
-	rospy.spin()
-	
-if __name__ == '__main__':
-	rospy.init_node('own_node', anonymous=True)
-	listener()
-	
-"""
 
 class OwnNode:
 	"""
@@ -52,36 +35,62 @@ class OwnNode:
 		#self.srv_init_pos = rospy.Service('srv_init_pos', init_pos.srv, self.handle_init_pos)
 
 	def callback_scan(self, data):
-		if self.count[0]==0:
-			self.sim_lock.acquire()
-			rospy.loginfo(data.ranges[2])
+		self.sim_lock.acquire()
+		if self.count[0]==0 and self.count[1]==0:
+			#tracking sensor data
+			#rospy.loginfo(data.ranges[2])
 			#1:back, 2:left, 3:front, 3:right
+			
+			#write received data
 			self.data[2:7]=data.ranges
 			self.count[0]=1
-			self.sim_lock.release()
-		elif self.count[1]==1:
+		elif self.count[0]==0 and self.count[1]==1:
+			#tracking sensor data
+			#rospy.loginfo(data.ranges[2])
+			#1:back, 2:left, 3:front, 3:right
+			
+			#write received data
+			self.data[2:7]=data.ranges
+			self.count[0]=1
+			
+			#publish direction if scan values and position of robot is received for that time stamp
 			self.count[0]=0
 			self.count[1]=0
 			self.publish()
+		self.sim_lock.release()
 		
 	def callback_pos(self, data):
-		if self.count[1]==0:
-			self.sim_lock.acquire()
-			rospy.loginfo(data.x)
+		self.sim_lock.acquire()
+		if self.count[1]==0 and self.count[0]==0:
+			#tracking sensor data
+			#rospy.loginfo(data.x)
+			
+			#write received data
 			self.data[0]=data.x
 			self.data[1]=data.y
 			self.count[1]=1
-			self.sim_lock.release()
-		elif self.count[0]==1:
+		elif self.count[1]==0 and self.count[0]==1:
+			#tracking sensor data
+			#rospy.loginfo(data.x)
+			
+			#write received data
+			self.data[0]=data.x
+			self.data[1]=data.y
+			self.count[1]=1
+			
+			#publish direction if scan values and position of robot is received for that time stamp
 			self.count[0]=0
 			self.count[1]=0
 			self.publish()
+		self.sim_lock.release()
 		
 	def handle_init_pos(self, req):
 		self.init_pos[0] = req.x
 		self.init_pos[1] = req.y
 		
 	def publish (self):
+	
+		#move North if possible otherwise move East
 		if self.data[4]>1:
 			self.pub_move.publish('N')
 		elif self.data[5]>1:
@@ -92,6 +101,7 @@ class OwnNode:
 		# Update message data
 
 		while not rospy.is_shutdown():
+			#keeps node from exiting until the node has been shutdown.
 			rospy.spin()
 			
 
