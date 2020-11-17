@@ -47,17 +47,27 @@ After running the node you should be able to view the info about the node in the
 
 The robot has 4 range sensors (+4 optional ones), see Fig. 2. Each sensor measures the distance in tiles to the next object (black cell) in its respective direction. The node also subscribes to the ```/move``` topic, expecting a String as a move command (cardinal direction: ∈ {𝑆, 𝑊, 𝑁, 𝐸}).
 
-
 ### Exercises
 
 Your task is it to write a simple planner node, that listens to the position and sensor information from the simulator node and publishes periodical move commands to make the robot reach the goal (red cell) shown in Fig. 3. The robot will start in the bottom left (green cell).
 
 1. Fork and clone the provided ROS code into your local catkin-workspace. Build your workspace and make sure it runs as expected.
 2. Create your own branch and your own ROS package within the provided repository. Make sure to read the rest of this exercise first in order to define the correct dependencies when creating the package (you can also add them later).
-3. Now, that you are ready to code, implement a ROS node with two subscribers, one publisher as well as a service call to the simulator node.
+3. Now, that you are ready to code, implement a ROS node with two subscribers, 
+one publisher as well as a service call to the simulator node.
    1. The service call to /init_pos is used to initialize the position of the robot to (2, 0).
    2. The subscribers receive the robots position and sensor data from the simulator node.
    3. The publisher sends a simple String as a ROS message on the topic /move.
    4. Now write a simple logic, that combines this data by selecting a movement (S, W, N, E) at each time step, which will guide the robot to the goal (red), while avoiding obstacles (black) and staying with the world boundaries.
 
 Note: This is not a complex algorithm. Just think of how you would explain the path to another person.
+
+### Exercises_Solution
+
+Own_node is a simple planner node, that listens to the position and sensor information from the simulator node and publishes periodical move commands to make the robot reach the goal (red cell) shown in Fig. 3. The robot will start in the bottom left (green cell).
+
+1. Own_node contains two subsribers receiving the robots position and sensor data from the simulator node
+2. Own_node also contains a publisher sends a simple String as a ROS message on the topic /move
+
+Own_node contains a simple logic to select a movement (S, W, N, E) at each time step. It always tries to go 'N' when possible. When detecting a wall in 'N' direction it tries to go 'E'. By Following this stratgy, own_node is able to navigate the robot in the simulator node from the initial position (init_pos) to the goal position without bumping into a wall. The service init_pos is adapted and used in the simulation node to always initializing the robot in position (x=2, y=0).
+
