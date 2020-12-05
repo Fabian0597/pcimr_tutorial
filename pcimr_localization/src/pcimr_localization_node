@@ -2,6 +2,7 @@
 
 import rospy
 import numpy as np
+import math
 
 from std_msgs.msg import String
 from sensor_msgs.msg import LaserScan
@@ -10,6 +11,18 @@ from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import Marker
 
 
+def bel_2_odds(bel):
+	if bel > 0:
+		return math.log10(bel/(1-bel))
+	else:
+		return -10000
+
+def odds_2_bel(odds):
+	if odds < 100:
+		return (1-(1/(1+math.exp(odds))))
+	else:
+		return 0
+		
 class PCIMR_Localization_Node:
 	"""
 	A node, capsuling the functionality from the simple robot simulator.
@@ -18,7 +31,27 @@ class PCIMR_Localization_Node:
 	def __init__(self):
 	
 		# Retrieve ROS Params
-		robot_move_prob = rospy.get_param('~robot_move_probabilities')
+		self.robot_move_prob = rospy.get_param('~robot_move_probabilities')
+		self.measurement_prob = [0.8, 0.1]
+		
+		# set up message
+		self.msg_map = OccupancyGrid()
+		self.msg_map.header.frame_id = 'map'
+		self.msg_map.header.seq = 0
+		self.msg_map.info.map_load_time = rospy.Time.now()
+		self.msg_map.info.resolution = 1
+		self.msg_map.info.height = 20
+		self.msg_map.info.width = 20
+		
+		# Initialize map of size 50x50 with 0.5 in every cell
+		self.prob_map_odds = np.full((self.msg_map.info.height, self.msg_map.info.width),0.0)
+		self.prob_map = np.full((self.msg_map.info.height, self.msg_map.info.width),0.5)
+		self.prob_map_prior = np.full((self.msg_map.info.height, self.msg_map.info.width),0.5)
+		
+		# Subscribed data
+		self.pos = np.array([0,0])
+		self.pos_old = np.array([0,0])
+		
 		
 		
 		
@@ -30,13 +63,85 @@ class PCIMR_Localization_Node:
 		self.sub_scan = rospy.Subscriber('/scan', LaserScan,  self.cb_scan)
 		
 	def cb_pos(self, data):
-		pass
+		
+		self.pos_old[0] = self.pos[0]
+		self.pos_old[1] = self.pos[1]
+		
+		self.pos[0] = data.y
+		self.pos[1] = data.x
+		
+		
 	
 	def cb_scan(self, data):
-		pass
+	
+		# int values for scan
+		self.scan=[round(x) for x in data.ranges]
+	
+		
+		#scan directions	
+		directions = np.array([[-1,0], [0,1], [1,0], [0,-1]])
+		
+		# get l_0 for current position
+		l_0 = self.prob_map_prior[self.pos[0], self.pos[1]]
+		
+		
+		for u in range(np.shape(directions)[0]):
+			
+			
+			
+			
+			
+			#calculate prob for not_sensed area
+			for x in range(0,self.scan[u]-1):
+			
+				if (self.pos + directions[u]*x)[0] >=0 and (self.pos + directions[u]*x)[0] < self.msg_map.info.height and (self.pos + directions[u]*x)[1] >=0 and (self.pos + directions[u]*x)[1] < self.msg_map.info.width:
+				
+					self.prob_map[(self.pos + directions[u]*x)[0], (self.pos + directions[u]*x)[1]] = 0
+			
+		
+		
+		
+			#calculate prob for sensed area -1
+			if (self.pos + directions[u]*(self.scan[u]-1))[0] >= 0 and (self.pos + directions[u]*(self.scan[u]-1))[0] < self.msg_map.info.height and (self.pos + directions[u]*(self.scan[u]-1))[1] >= 0 and (self.pos + directions[u]*(self.scan[u]-1))[1] < 				self.msg_map.info.width:
+				
+				self.prob_map[(self.pos + directions[u]*(self.scan[u]-1))[0], (self.pos + directions[u]*(self.scan[u]-1))[1]] = odds_2_bel((self.prob_map_odds[(self.pos + directions[u]*(self.scan[u]-1))[0], (self.pos + 					directions[u]*(self.scan[u]-1))[1]]) + bel_2_odds(self.measurement_prob[1]) - bel_2_odds(l_0))
+				
+				self.prob_map_odds[(self.pos + directions[u]*(self.scan[u]-1))[0], (self.pos + directions[u]*(self.scan[u]-1))[1]] = (self.prob_map_odds[(self.pos + directions[u]*(self.scan[u]-1))[0], (self.pos + 					directions[u]*(self.scan[u]-1))[1]]) + bel_2_odds(self.measurement_prob[1]) - bel_2_odds(l_0)
+	
+	
+	
+		
+			#calculate prob for sensed area
+			if (self.pos + directions[u] * self.scan[u])[0] >= 0 and (self.pos + directions[u] * self.scan[u])[0] < self.msg_map.info.height and (self.pos + directions[u] * self.scan[u])[1] >= 0 and (self.pos + directions[u] * self.scan[u])[1] < 				self.msg_map.info.width:
+				
+				self.prob_map[(self.pos + directions[u]*self.scan[u])[0], (self.pos + directions[u]*self.scan[u])[1]] = odds_2_bel((self.prob_map_odds[(self.pos + directions[u]*self.scan[u])[0], (self.pos + directions[u]*self.scan[u])[1]]) + 				bel_2_odds(self.measurement_prob[0]) - bel_2_odds(l_0))
+				
+				self.prob_map_odds[(self.pos + directions[u]*self.scan[u])[0], (self.pos + directions[u]*self.scan[u])[1]] = (self.prob_map_odds[(self.pos + directions[u]*self.scan[u])[0], (self.pos + directions[u]*self.scan[u])[1]]) + 				bel_2_odds(self.measurement_prob[0]) - bel_2_odds(l_0)
+
+			
+			
+			
+			
+			#calculate prob for sensed area +1	
+			if (self.pos + directions[u]*(self.scan[u]+1))[0] >= 0 and (self.pos + directions[u]*(self.scan[u]+1))[0] < self.msg_map.info.height and (self.pos + directions[u]*(self.scan[u]+1))[1] >= 0 and (self.pos + directions[u]*(self.scan[u]+1))[1] < 				self.msg_map.info.width:
+				
+				self.prob_map[(self.pos + directions[u]*(self.scan[u]+1))[0], (self.pos + directions[u]*(self.scan[u]+1))[1]] = odds_2_bel((self.prob_map_odds[(self.pos + directions[u]*(self.scan[u]+1))[0], (self.pos + directions[u]*(self.scan[u]+1))[1]]) + bel_2_odds(self.measurement_prob[1]) - bel_2_odds(l_0))
+				
+				self.prob_map_odds[(self.pos + directions[u]*(self.scan[u]+1))[0], (self.pos + directions[u]*(self.scan[u]+1))[1]] = (self.prob_map_odds[(self.pos + directions[u]*(self.scan[u]+1))[0], (self.pos + directions[u]*(self.scan[u]+1))[1]]) + bel_2_odds(self.measurement_prob[1]) - bel_2_odds(l_0)
+			
+				
+		rospy.loginfo(self.prob_map)
+		rospy.loginfo("_______________________________________________________________________________________")
+				
+		
 	
 	def publish(self):
-		pass
+	
+		prob_pos_print = self.prob_map
+		prob_pos_print = prob_pos_print*100
+		prob_pos_print = prob_pos_print.astype(int)
+		self.msg_map.data = tuple(prob_pos_print.ravel())
+		self.pub_map.publish(self.msg_map)
 		
 	def run(self):
 		rate = rospy.Rate(10)
