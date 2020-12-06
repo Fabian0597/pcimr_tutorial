@@ -79,19 +79,22 @@ class PCIMR_Localization_Node:
 	
 		
 		#scan directions	
-		directions = np.array([[-1,0], [0,1], [1,0], [0,-1]])
+		directions = np.array([[-1,0], [0,-1], [1,0], [0,1]])
 		
 		# get l_0 for current position
 		l_0 = self.prob_map_prior[self.pos[0], self.pos[1]]
 		
-		
+		"""
+		go through all directions of the scanner
+		"""
 		for u in range(np.shape(directions)[0]):
 			
 			
 			
 			
-			
-			#calculate prob for not_sensed area
+			"""
+			calculate prob for not_sensed area
+			"""
 			for x in range(0,self.scan[u]-1):
 			
 				if (self.pos + directions[u]*x)[0] >=0 and (self.pos + directions[u]*x)[0] < self.msg_map.info.height and (self.pos + directions[u]*x)[1] >=0 and (self.pos + directions[u]*x)[1] < self.msg_map.info.width:
@@ -100,8 +103,9 @@ class PCIMR_Localization_Node:
 			
 		
 		
-		
-			#calculate prob for sensed area -1
+			"""
+			calculate prob for sensed area -1
+			"""
 			if (self.pos + directions[u]*(self.scan[u]-1))[0] >= 0 and (self.pos + directions[u]*(self.scan[u]-1))[0] < self.msg_map.info.height and (self.pos + directions[u]*(self.scan[u]-1))[1] >= 0 and (self.pos + directions[u]*(self.scan[u]-1))[1] < 				self.msg_map.info.width:
 				
 				self.prob_map[(self.pos + directions[u]*(self.scan[u]-1))[0], (self.pos + directions[u]*(self.scan[u]-1))[1]] = odds_2_bel((self.prob_map_odds[(self.pos + directions[u]*(self.scan[u]-1))[0], (self.pos + 					directions[u]*(self.scan[u]-1))[1]]) + bel_2_odds(self.measurement_prob[1]) - bel_2_odds(l_0))
@@ -110,8 +114,9 @@ class PCIMR_Localization_Node:
 	
 	
 	
-		
-			#calculate prob for sensed area
+			"""
+			calculate prob for sensed area
+			"""
 			if (self.pos + directions[u] * self.scan[u])[0] >= 0 and (self.pos + directions[u] * self.scan[u])[0] < self.msg_map.info.height and (self.pos + directions[u] * self.scan[u])[1] >= 0 and (self.pos + directions[u] * self.scan[u])[1] < 				self.msg_map.info.width:
 				
 				self.prob_map[(self.pos + directions[u]*self.scan[u])[0], (self.pos + directions[u]*self.scan[u])[1]] = odds_2_bel((self.prob_map_odds[(self.pos + directions[u]*self.scan[u])[0], (self.pos + directions[u]*self.scan[u])[1]]) + 				bel_2_odds(self.measurement_prob[0]) - bel_2_odds(l_0))
@@ -121,8 +126,9 @@ class PCIMR_Localization_Node:
 			
 			
 			
-			
-			#calculate prob for sensed area +1	
+			"""
+			calculate prob for sensed area +1
+			"""	
 			if (self.pos + directions[u]*(self.scan[u]+1))[0] >= 0 and (self.pos + directions[u]*(self.scan[u]+1))[0] < self.msg_map.info.height and (self.pos + directions[u]*(self.scan[u]+1))[1] >= 0 and (self.pos + directions[u]*(self.scan[u]+1))[1] < 				self.msg_map.info.width:
 				
 				self.prob_map[(self.pos + directions[u]*(self.scan[u]+1))[0], (self.pos + directions[u]*(self.scan[u]+1))[1]] = odds_2_bel((self.prob_map_odds[(self.pos + directions[u]*(self.scan[u]+1))[0], (self.pos + directions[u]*(self.scan[u]+1))[1]]) + bel_2_odds(self.measurement_prob[1]) - bel_2_odds(l_0))
