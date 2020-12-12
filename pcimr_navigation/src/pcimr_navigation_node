@@ -80,8 +80,6 @@ class PCIMR_Navigarion_Node:
 		self.msg_path = Path()
 		self.msg_path.header.frame_id = "map"
 		
-		
-		
 		# Initialize Publishers
 		self.pub_path = rospy.Publisher('/global_path', Path, queue_size=10)
 		self.pub_goal_visualization = rospy.Publisher('/visualization/goal', Marker, queue_size=10)
@@ -123,10 +121,11 @@ class PCIMR_Navigarion_Node:
 			#store new goal
 			#self.goal[0] = width = x, self.goal[1] = height = y, 
 			self.goal = np.array([int(data.pose.position.x), int(data.pose.position.y)])
+			
+			#create marker at goal
 			self.msg_goal_marker.pose.position.x = self.goal[0]+0.5
 			self.msg_goal_marker.pose.position.y = self.goal[1]+0.5
 			
-		
 		
 			#A* Search
 			
@@ -141,9 +140,10 @@ class PCIMR_Navigarion_Node:
 			#add start node to open list
 			open_list.append(start_node)
 			
+			
 			#Loop until open List is empty
 			while len(open_list) > 0:
-			
+							
 				#sort list with cost value f
 				open_list.sort(key=operator.attrgetter("f"), reverse = False)
 				
@@ -155,6 +155,7 @@ class PCIMR_Navigarion_Node:
 				
 				"""
 				print list
+				"""
 				"""
 				rospy.loginfo("_____________________________")
 				rospy.loginfo("LIST OPEN")
@@ -170,14 +171,15 @@ class PCIMR_Navigarion_Node:
 					rospy.loginfo(i.position )
 					rospy.loginfo(i.f )
 				rospy.loginfo("_____________________________")
+				"""
 					
-					
-					
+				
 					
 					
 					
 				#get new node from open list with smalles f-value
 				current_node = open_list.pop(0)
+				
 				#add new node to closed list
 				closed_list.append(current_node)
 				
@@ -188,16 +190,16 @@ class PCIMR_Navigarion_Node:
 				"""
 				print current node
 				"""
-				
+				"""
 				rospy.loginfo("CURRENT NODE+++")
 				rospy.loginfo(current_node.position)
 				rospy.loginfo("CURRENT NODE---")
+				"""
 				
 				
 				
 				
-				
-				
+				"""CREATE PATH"""
 				if current_node.position[0] == goal_node.position[0] and current_node.position[1] == goal_node.position[1]:
 					
 					#initialize empty path
@@ -205,12 +207,11 @@ class PCIMR_Navigarion_Node:
 					
 					#append goal_node
 					path.append(goal_node.position)
-					while current_node.position[0] != start_node.position[0] and current_node.position[1] != start_node.position[1]:
+					rospy.loginfo(current_node.position)
+					rospy.loginfo(start_node.position)
+					while current_node.position[0] != start_node.position[0] or current_node.position[1] != start_node.position[1]:
 						current_node = current_node.parent
 						path.append(current_node.position)
-					
-					#append start node
-					path.append(start_node.position)
 					
 					#reverse path
 					path = path[::-1]
@@ -227,73 +228,66 @@ class PCIMR_Navigarion_Node:
 					self.got_path = 1
 					
 					#return path
+					rospy.loginfo("PATH")
+					rospy.loginfo(path)
 					return path
 					
-					
+				
+				
+				"""CREATE NEW NODES FOR OPEN LIST"""
 				x = current_node.position[0]
 				y = current_node.position[1]
-				
 				neighbours = [np.array([x-1,y]), np.array([x+1,y]), np.array([x,y-1]), np.array([x,y+1])]
 				
 				for n in neighbours:
+				
+					#check if neighbours are with in grid space
+					if (n[0] < 0 or n[0] >=20 or n[1] < 0 or n[1] >=20):
+						continue
+					
 					#check if neighbours are valid positions
 					if (self.map[n[1], n[0]] == -1 or self.map[n[1], n[0]] == 100):
-						rospy.loginfo("BREAK 1")
-						rospy.loginfo(n)
 						continue
 					#create a new node
 					neighbour = Node(n, current_node)
-					
-					# check if node is in closed list. If it is in closed list, shortest way to node is already found. There is no need to further explore the node
-					contains_neighbour = 0
-					for x in closed_list:
-						#check if neighbour is in closed_list
-						if x.position[0] == neighbour.position[0] and x.position[1] == neighbour.position[1] :
-							contains_neighbour =  contains_neighbour + 1
-							
-					if contains_neighbour > 0:
-						rospy.loginfo("BREAK 2")
-						rospy.loginfo(n)
-						continue
-						
-					#distance values to goal, start and cost for new node
 					neighbour.g = abs(neighbour.position[0]-start_node.position[0]) + abs(neighbour.position[1]-start_node.position[1])
 					neighbour.h = abs(neighbour.position[0]-goal_node.position[0]) + abs(neighbour.position[1]-goal_node.position[1])
 					neighbour.f = neighbour.g + neighbour.h
 					
-					# add node to open list if node is not in list yet or
-
+					
+					# check if node is in closed list.
+					contains_neighbour = 0
+					for x in closed_list:
+						if x.position[0] == neighbour.position[0] and x.position[1] == neighbour.position[1] :
+							contains_neighbour =  contains_neighbour + 1
+							
+					if contains_neighbour > 0:
+						continue
+						
+					
+					# check if node is in closed list.
 					contains_neighbour = 0
 					for x in open_list:
 						if (x.position[0] == neighbour.position[0] and x.position[1] == neighbour.position[1]):
 							contains_neighbour = contains_neighbour + 1
 							
 					if contains_neighbour > 0:
-						rospy.loginfo("BREAK 3")
-						rospy.loginfo(n)
 						continue
 					
 					open_list.append(neighbour)
 
-
-								
-				
 			#no path found			
 			return None
 			
-		else:
-			rospy.loginfo("Not a possible goal")
 					
 				
 	
 	
 		
 	def publish(self):
-	
 		if self.got_goal == 1:
 			self.pub_goal_visualization.publish(self.msg_goal_marker)
 		if self.got_path == 1:
-			rospy.loginfo(self.msg_path_marker.points)
 			self.pub_path_visualization.publish(self.msg_path_marker)
 			self.pub_path.publish(self.msg_path)
 			

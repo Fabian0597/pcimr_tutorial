@@ -6,6 +6,10 @@
         <rosparam param="robot_move_probabilities" subst_value="True">$(arg robot_move_probabilities)</rosparam> 
     </node>
     
+    <node pkg="pcimr_navigation" type="robot_mover" name="robot_mover" output="screen" respawn="false" respawn_delay="0">
+        <rosparam param="robot_move_probabilities" subst_value="True">$(arg robot_move_probabilities)</rosparam> 
+    </node>
+    
     <node pkg="pcimr_navigation" type="pcimr_navigation_node" name="pcimr_navigation_node" output="screen">
         <rosparam param="robot_move_probabilities" subst_value="True">$(arg robot_move_probabilities)</rosparam> 
     </node>
