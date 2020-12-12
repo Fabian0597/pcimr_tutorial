@@ -146,58 +146,13 @@ class PCIMR_Navigarion_Node:
 							
 				#sort list with cost value f
 				open_list.sort(key=operator.attrgetter("f"), reverse = False)
-				
-				
-				
-				
-				
-				
-				
-				"""
-				print list
-				"""
-				"""
-				rospy.loginfo("_____________________________")
-				rospy.loginfo("LIST OPEN")
-				for i in open_list:
-					rospy.loginfo(i.position )
-					rospy.loginfo(i.f )
-					
-				rospy.loginfo("_____________________________")
-				
-				rospy.loginfo("LIST CLOSED")
-				for i in closed_list:
-					
-					rospy.loginfo(i.position )
-					rospy.loginfo(i.f )
-				rospy.loginfo("_____________________________")
-				"""
-					
-				
-					
-					
 					
 				#get new node from open list with smalles f-value
 				current_node = open_list.pop(0)
 				
 				#add new node to closed list
 				closed_list.append(current_node)
-				
-		
-		
-		
-		
-				"""
-				print current node
-				"""
-				"""
-				rospy.loginfo("CURRENT NODE+++")
-				rospy.loginfo(current_node.position)
-				rospy.loginfo("CURRENT NODE---")
-				"""
-				
-				
-				
+
 				
 				"""CREATE PATH"""
 				if current_node.position[0] == goal_node.position[0] and current_node.position[1] == goal_node.position[1]:
@@ -207,8 +162,6 @@ class PCIMR_Navigarion_Node:
 					
 					#append goal_node
 					path.append(goal_node.position)
-					rospy.loginfo(current_node.position)
-					rospy.loginfo(start_node.position)
 					while current_node.position[0] != start_node.position[0] or current_node.position[1] != start_node.position[1]:
 						current_node = current_node.parent
 						path.append(current_node.position)
@@ -228,8 +181,6 @@ class PCIMR_Navigarion_Node:
 					self.got_path = 1
 					
 					#return path
-					rospy.loginfo("PATH")
-					rospy.loginfo(path)
 					return path
 					
 				
