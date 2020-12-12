@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+import time
+import random
+from threading import Lock
+
+from std_msgs.msg import String
+from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Point, Pose, Quaternion
+from nav_msgs.msg import OccupancyGrid
+from visualization_msgs.msg import Marker
+
+class Localization_Node:
+	"""
+	A node, capsuling the functionality from the simple robot simulator.
+	"""
+
+	def __init__(self):
+		#robot_variable
+		
+		self.receive_map_data=0
+		
+		#input probabilities
+		input_string = rospy.get_param('~robot_move_probabilities')
+		
+		#create list of float
+		input_string = input_string[1:len(input_string)-2]
+		self.action_prob=[]
+		for  item in input_string.split(', '):
+			self.action_prob.append(float(item))
+		
+		#sensing probabilities
+		self.sensing_prob=[0.8,0.1]
+		
+		
+		# set up message
+		self.msg_map = OccupancyGrid()
+		self.msg_pos_marker = Marker()
+		self.msg_pos_marker.header.frame_id = "map"
+		self.msg_pos_marker.ns = "navigation"
+		self.msg_pos_marker.id = 0
+		self.msg_pos_marker.type = Marker.CUBE
+		self.msg_pos_marker.action = Marker.ADD
+		self.msg_pos_marker.scale.x = 1
+		self.msg_pos_marker.scale.y = 1
+		self.msg_pos_marker.scale.z = 0.2
+		self.msg_pos_marker.color.a = 1.0
+		self.msg_pos_marker.color.r = 0.0
+		self.msg_pos_marker.color.g = 1.0
+		self.msg_pos_marker.color.b = 0.0
+		self.msg_pos_marker.pose.orientation = Quaternion(0, 0, 0, 1)
+		
+		
+		# Initialize member variables
+		self.sim_lock = Lock()
+
+
+		# Initialize Subscribers
+		self.sub_map = rospy.Subscriber('/map', OccupancyGrid, self.cb_map)
+		self.sub_scan = rospy.Subscriber('/scan', LaserScan, self.cb_scan)
+		self.sub_move = rospy.Subscriber('/move', String, self.cb_move)
+		
+		#Initialize Publisher
+		self.pub_pos = rospy.Publisher('/robot_pos', Point, queue_size=10)
+		self.pub_pos_marker = rospy.Publisher('/visualization/robot_pos', Marker, queue_size=10)
+		self.pub_map = rospy.Publisher('/robot_pos_map', OccupancyGrid, queue_size=10)
+		
+		
+	
+	def cb_map(self, data):
+	# all probabilities for fields which are not reachable are zero
+		self.msg_map.header = data.header
+		self.msg_map.info = data.info
+		
+		# initialize map of uniform probabilities the first time the robot receives a message on /map topic
+		if self.receive_map_data == 0:
+			self.prob_pos = np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height)
+			self.prob_pos = self.prob_pos.astype('float64')
+			valid_states=len(self.prob_pos[self.prob_pos == 0])
+			self.prob_pos[self.prob_pos == 0]=1/valid_states
+			self.prob_pos[self.prob_pos == 100] = 0
+			self.prob_pos[self.prob_pos == -1] = 0
+			
+			self.prob_pos_scan = np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height)
+			self.prob_pos_scan = self.prob_pos_scan.astype('float64')
+			self.prob_pos_scan[self.prob_pos_scan == 0]=1/valid_states
+			self.prob_pos_scan[self.prob_pos_scan == 100] = 0
+			self.prob_pos_scan[self.prob_pos_scan == -1] = 0
+			
+			self.map = np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height)
+			
+			self.receive_map_data = 1
+			
+		
+		
+	def cb_scan(self, data):
+		
+		
+		# int values for scan
+		scan=[round(x) for x in data.ranges]
+		
+		directions = [(-1,0), (0,-1), (1,0), (0,1)]
+		
+		#wait until map received
+		if self.receive_map_data == 0:
+			return
+		
+		#iterate through rows
+		for i in range(np.shape(self.prob_pos_scan)[0]):
+			#iterate through collumns
+			for j in range(np.shape(self.prob_pos_scan)[1]):
+			
+				#calculate probabilities for valid states
+				if self.map[i][j] == 100 or self.map[i][j] == -1:
+					continue
+					
+				#initialize prob
+				prob=1
+				
+				# add probabilities for measuring scan in all 4 directions
+				for u in range(len(directions)):
+					
+					#check if state in distance of laserscan is in grid world 20x20
+					if (i+directions[u][0]*scan[u]) >= 0 and (i+directions[u][0]*scan[u]) < 20 and (j+directions[u][1]*scan[u]) >= 0 and (j+directions[u][1]*scan[u]) < 20:
+					
+						#check if state in distance of laserscan is a wall
+						if self.map[i+directions[u][0]*scan[u]][j+directions[u][1]*scan[u]] == 100:
+						
+							prob=prob*self.sensing_prob[0]
+					
+					#check if state in distance of laserscan+1 is in grid world 20x20		
+					elif (i+directions[u][0]*(scan[u]+1)) >= 0 and (i+directions[u][0]*(scan[u]+1)) < 20 and (j+directions[u][1]*(scan[u]+1)) >= 0 and (j+directions[u][1]*(scan[u]+1)) < 20:
+						#check if state in distance of laserscan+1 is a wall
+						if self.map[i+directions[u][0]*(scan[u]+1)][j+directions[u][1]*(scan[u]+1)] == 100:
+						
+							prob=prob*self.sensing_prob[1]
+							
+					
+					#check if state in distance of laserscan-1 is in grid world 20x20		
+					elif (i+directions[u][0]*(scan[u]-1)) >= 0 and (i+directions[u][0]*(scan[u]-1)) < 20 and (j+directions[u][1]*(scan[u]-1)) >= 0 and (j+directions[u][1]*(scan[u]-1)) < 20:
+						#check if state in distance of laserscan-1 is a wall
+						if self.map[i+directions[u][0]*(scan[u]-1)][j+directions[u][1]*(scan[u]-1)] == 100:
+						
+							prob=prob*self.sensing_prob[1]
+					else:
+						prob=0
+							
+				#update map
+				self.prob_pos_scan[i][j]=prob
+				
+		#normalize probabilities
+		self.prob_pos=self.prob_pos*self.prob_pos_scan*(1/(sum(sum(self.prob_pos*self.prob_pos_scan))))
+				
+	
+	
+	def cb_move(self, data):
+		
+		if self.receive_map_data == 0:
+			return
+		
+		#get move and calculate prediction by recalculating probabilities for all 400 cells in grid
+		direction = str(data)
+		N = String()
+		E = String()
+		S = String()
+		W = String()
+		N.data= "N"
+		E.data= "E"
+		S.data= "S"
+		W.data= "W"
+		
+		prob_map=self.prob_pos
+	
+		if data == N:
+			a_00 = (1,0)
+			a_minus_90 = (0,-1)
+		elif data == E:
+			a_00 = (0,1)
+			a_minus_90 = (1,0)
+		elif data == S:
+			a_00 = (-1,0)
+			a_minus_90 = (0,1)
+		elif data == W:
+			a_00 = (0,-1)
+			a_minus_90 = (-1,0)
+		
+		
+		#iterate throuh rows
+		for i in range(np.shape(self.prob_pos)[0]):
+			#iterate throuh collumns
+			for j in range(np.shape(self.prob_pos)[1]):
+				#check if state is a valid state
+				if self.map[i][j] == 100 or self.map[i][j] == -1:
+					continue
+
+				
+				prob=0
+				
+				
+				#add probabilities for all 5 possible previous states * corresponding transition probability
+				
+				#coming from state_t-1 to state t in move direction
+				if (i-a_00[0]) >= 0 and (i-a_00[0]) < 20 and (j-a_00[1]) >= 0 and (j-a_00[1]) < 20:
+					#check if state t-1 is wall or empty space
+					if self.map[i-a_00[0]][j-a_00[1]] != -1 or self.map[i-a_00[0]][j-a_00[1]] != 100:
+						prob=prob+self.action_prob[0]*self.prob_pos[i-a_00[0]][j-a_00[1]]
+					 
+				#coming from state_t-1 to state t in move direction -90
+				if (i-a_minus_90[0]) >= 0 and (i-a_minus_90[0]) < 20 and (j-a_minus_90[1]) >= 0 and (j-a_minus_90[1]) < 20:
+					#check if state t-1 is wall or empty space
+					if self.map[i-a_minus_90[0]][j-a_minus_90[1]] != -1 or self.map[i-a_minus_90[0]][j-a_minus_90[1]] != 100:
+						prob=prob+self.action_prob[1]*self.prob_pos[i-a_minus_90[0]][j-a_minus_90[1]]
+
+				#coming from state_t-1 to state t in move direction +90
+				if (i+a_minus_90[0]) >= 0 and (i+a_minus_90[0]) < 20 and (j+a_minus_90[1]) >= 0 and (j+a_minus_90[1]) < 20:
+					#check if state t-1 is wall or empty space
+					if self.map[i+a_minus_90[0]][j+a_minus_90[1]] != -1 or self.map[i+a_minus_90[0]][j+a_minus_90[1]] != 100:
+						prob=prob+self.action_prob[2]*self.prob_pos[i+a_minus_90[0]][j+a_minus_90[1]]
+					 			 
+				#coming from state_t-1 to state t in move direction +180
+				if (i+a_00[0]) >= 0 and (i+a_00[0]) < 20 and (j+a_00[1]) >= 0 and (j+a_00[1]) < 20:
+					#check if state t-1 is wall or empty space
+					if self.map[i+a_00[0]][j+a_00[1]] != -1 or self.map[i+a_00[0]][j+a_00[1]] != 100:
+					 prob=prob+self.action_prob[3]*self.prob_pos[i+a_00[0]][j+a_00[1]]
+					 
+				#stay in position
+				prob=prob+self.action_prob[4]*self.prob_pos[i][j]
+				
+				#update map of probabily for this timestep without changing probabilities which are still used in this time step
+				prob_map[i][j] = prob
+			
+		#update map of probability	
+		self.prob_pos=prob_map
+
+		
+	
+	def publish(self):
+		if self.receive_map_data == 1:
+			
+	
+			#calcluate most likely position
+			max_prob = np.where(self.prob_pos == self.prob_pos.max())
+			
+			# pick random position if there are several most likely position
+			pick = random.choice(range(len(max_prob[1])))
+			x_pos = max_prob[1][pick]
+			y_pos = max_prob[0][pick]
+			
+			#publish position
+			point = Point()
+			point.x=x_pos
+			point.y=y_pos
+			point.z=0
+			self.pub_pos.publish(point)
+			
+			#publish Marker
+			self.msg_pos_marker.pose.position.x = x_pos+0.5
+			self.msg_pos_marker.pose.position.y = y_pos+0.5
+			self.pub_pos_marker.publish(self.msg_pos_marker)
+				
+			#publish map
+			prob_pos_print = self.prob_pos
+			prob_pos_print = prob_pos_print*100
+			prob_pos_print = prob_pos_print.astype(int)
+			self.msg_map.data = tuple(prob_pos_print.ravel())
+			self.pub_map.publish(self.msg_map)
+			
+
+		
+	def run(self):
+		rate = rospy.Rate(10)
+		while not rospy.is_shutdown():
+			#keeps node from exiting until the node has been shutdown.
+			self.publish()
+			rate.sleep()
+
+	
+if __name__ == "__main__":
+    rospy.init_node('localization_node')
+    localization_node = Localization_Node()
+    localization_node.run()
+
