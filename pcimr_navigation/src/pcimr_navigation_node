@@ -1,0 +1,315 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+import operator
+
+from std_msgs.msg import String
+from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion
+from nav_msgs.msg import OccupancyGrid, Path
+from visualization_msgs.msg import Marker
+
+
+class Node:
+	def __init__(self, position, parent):
+	
+	
+		
+		self.position = position
+		self.parent = parent
+		self.g = 0 #distance to start node
+		self.h = 0 #distance to goal node
+		self.f = 0 #cost
+		
+		
+		
+	
+		
+
+class PCIMR_Navigarion_Node:
+	"""
+	A node, capsuling the functionality from the simple robot simulator.
+	"""
+
+	def __init__(self):
+	
+		# Retrieve ROS Params
+		self.robot_move_prob = rospy.get_param('~robot_move_probabilities')
+		
+		
+		#robot variables
+		self.got_goal = 0
+		self.got_path = 0
+		
+		# array of shape [height = y] [width = x]
+		self.map = 0
+		
+		#self.pos[0] = width = x, self.pos[1] = height = y,
+		self.pos = 0
+		
+		#set up messages
+		self.msg_goal_marker = Marker()
+		self.msg_goal_marker.header.frame_id = "map"
+		self.msg_goal_marker.ns = "navigation"
+		self.msg_goal_marker.id = 0
+		self.msg_goal_marker.type = Marker.CUBE
+		self.msg_goal_marker.action = Marker.ADD
+		self.msg_goal_marker.scale.x = 1
+		self.msg_goal_marker.scale.y = 1
+		self.msg_goal_marker.scale.z = 0.2
+		self.msg_goal_marker.color.a = 1.0
+		self.msg_goal_marker.color.r = 1.0
+		self.msg_goal_marker.color.g = 0.0
+		self.msg_goal_marker.color.b = 0.0
+		self.msg_goal_marker.pose.orientation = Quaternion(0, 0, 0, 1)
+		
+
+		self.msg_path_marker = Marker()
+		self.msg_path_marker.header.frame_id = "map"
+		self.msg_path_marker.ns = "navigation"
+		self.msg_path_marker.id = 0
+		self.msg_path_marker.type = Marker.LINE_STRIP
+		self.msg_path_marker.action = Marker.ADD
+		self.msg_path_marker.scale.x = 0.3
+		self.msg_path_marker.color.a = 0.5
+		self.msg_path_marker.color.r = 0.0
+		self.msg_path_marker.color.g = 0.0
+		self.msg_path_marker.color.b = 1.0
+		self.msg_path_marker.pose.orientation = Quaternion(0, 0, 0, 1)
+		
+		self.msg_path = Path()
+		self.msg_path.header.frame_id = "map"
+		
+		
+		
+		# Initialize Publishers
+		self.pub_path = rospy.Publisher('/global_path', Path, queue_size=10)
+		self.pub_goal_visualization = rospy.Publisher('/visualization/goal', Marker, queue_size=10)
+		self.pub_path_visualization = rospy.Publisher('/visualization/plan', Marker, queue_size=10)
+
+		# Initialize Subscribers
+		self.sub_map = rospy.Subscriber('/map', OccupancyGrid, self.cb_map)
+		self.sub_pos = rospy.Subscriber('/robot_pos', Point, self.cb_pos)
+		self.sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.a_star_search)
+		
+		
+	def cb_map(self, data):
+		self.map = np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height)
+
+		
+		
+	def cb_pos(self, data):
+		self.pos = np.array([int(data.x), int(data.y)])
+		
+	def a_star_search(self, data):
+		
+
+		
+		#no map received no position received yet
+		if (type(self.map) == int or type(self.pos) == int):
+			return None
+			
+		#check if goal is a valid cell
+		#transform position to integer
+		if self.map[int(data.pose.position.y), int(data.pose.position.x)] != -1 or self.map[int(data.pose.position.y), int(data.pose.position.x)] != 100:
+			
+			#allow publishing goal marker
+			self.got_goal = 1
+			
+			#delete path to old goal
+			self.msg_path_marker.points.clear()
+			
+			
+			#store new goal
+			#self.goal[0] = width = x, self.goal[1] = height = y, 
+			self.goal = np.array([int(data.pose.position.x), int(data.pose.position.y)])
+			self.msg_goal_marker.pose.position.x = self.goal[0]+0.5
+			self.msg_goal_marker.pose.position.y = self.goal[1]+0.5
+			
+		
+		
+			#A* Search
+			
+			#initialize lists
+			open_list = []
+			closed_list = []
+			
+			#define start and goal node
+			start_node = Node(self.pos, None)
+			goal_node = Node(self.goal,None)
+			
+			#add start node to open list
+			open_list.append(start_node)
+			
+			#Loop until open List is empty
+			while len(open_list) > 0:
+			
+				#sort list with cost value f
+				open_list.sort(key=operator.attrgetter("f"), reverse = False)
+				
+				
+				
+				
+				
+				
+				
+				"""
+				print list
+				"""
+				rospy.loginfo("_____________________________")
+				rospy.loginfo("LIST OPEN")
+				for i in open_list:
+					rospy.loginfo(i.position )
+					rospy.loginfo(i.f )
+					
+				rospy.loginfo("_____________________________")
+				
+				rospy.loginfo("LIST CLOSED")
+				for i in closed_list:
+					
+					rospy.loginfo(i.position )
+					rospy.loginfo(i.f )
+				rospy.loginfo("_____________________________")
+					
+					
+					
+					
+					
+					
+				#get new node from open list with smalles f-value
+				current_node = open_list.pop(0)
+				#add new node to closed list
+				closed_list.append(current_node)
+				
+		
+		
+		
+		
+				"""
+				print current node
+				"""
+				
+				rospy.loginfo("CURRENT NODE+++")
+				rospy.loginfo(current_node.position)
+				rospy.loginfo("CURRENT NODE---")
+				
+				
+				
+				
+				
+				
+				if current_node.position[0] == goal_node.position[0] and current_node.position[1] == goal_node.position[1]:
+					
+					#initialize empty path
+					path = []
+					
+					#append goal_node
+					path.append(goal_node.position)
+					while current_node.position[0] != start_node.position[0] and current_node.position[1] != start_node.position[1]:
+						current_node = current_node.parent
+						path.append(current_node.position)
+					
+					#append start node
+					path.append(start_node.position)
+					
+					#reverse path
+					path = path[::-1]
+					
+					# Add path cells to marker
+					for point in path:
+						self.msg_path_marker.points.append(Point(point[0]+0.5, point[1]+0.5, 0.0))
+						pose = PoseStamped()
+						pose.pose.position.x = point[0]
+						pose.pose.position.y = point[1]
+						self.msg_path.poses.append(pose)
+						
+					#allow publishing path
+					self.got_path = 1
+					
+					#return path
+					return path
+					
+					
+				x = current_node.position[0]
+				y = current_node.position[1]
+				
+				neighbours = [np.array([x-1,y]), np.array([x+1,y]), np.array([x,y-1]), np.array([x,y+1])]
+				
+				for n in neighbours:
+					#check if neighbours are valid positions
+					if (self.map[n[1], n[0]] == -1 or self.map[n[1], n[0]] == 100):
+						rospy.loginfo("BREAK 1")
+						rospy.loginfo(n)
+						continue
+					#create a new node
+					neighbour = Node(n, current_node)
+					
+					# check if node is in closed list. If it is in closed list, shortest way to node is already found. There is no need to further explore the node
+					contains_neighbour = 0
+					for x in closed_list:
+						#check if neighbour is in closed_list
+						if x.position[0] == neighbour.position[0] and x.position[1] == neighbour.position[1] :
+							contains_neighbour =  contains_neighbour + 1
+							
+					if contains_neighbour > 0:
+						rospy.loginfo("BREAK 2")
+						rospy.loginfo(n)
+						continue
+						
+					#distance values to goal, start and cost for new node
+					neighbour.g = abs(neighbour.position[0]-start_node.position[0]) + abs(neighbour.position[1]-start_node.position[1])
+					neighbour.h = abs(neighbour.position[0]-goal_node.position[0]) + abs(neighbour.position[1]-goal_node.position[1])
+					neighbour.f = neighbour.g + neighbour.h
+					
+					# add node to open list if node is not in list yet or
+
+					contains_neighbour = 0
+					for x in open_list:
+						if (x.position[0] == neighbour.position[0] and x.position[1] == neighbour.position[1]):
+							contains_neighbour = contains_neighbour + 1
+							
+					if contains_neighbour > 0:
+						rospy.loginfo("BREAK 3")
+						rospy.loginfo(n)
+						continue
+					
+					open_list.append(neighbour)
+
+
+								
+				
+			#no path found			
+			return None
+			
+		else:
+			rospy.loginfo("Not a possible goal")
+					
+				
+	
+	
+		
+	def publish(self):
+	
+		if self.got_goal == 1:
+			self.pub_goal_visualization.publish(self.msg_goal_marker)
+		if self.got_path == 1:
+			rospy.loginfo(self.msg_path_marker.points)
+			self.pub_path_visualization.publish(self.msg_path_marker)
+			self.pub_path.publish(self.msg_path)
+			
+		
+	
+
+		
+	def run(self):
+		rate = rospy.Rate(10)
+		while not rospy.is_shutdown():
+			#keeps node from exiting until the node has been shutdown.
+			self.publish()
+			rate.sleep()
+
+
+if __name__ == "__main__":
+	rospy.init_node('pcimr_navigation_node')
+	pcimr_navigation_node = PCIMR_Navigarion_Node()
+	pcimr_navigation_node.run()
