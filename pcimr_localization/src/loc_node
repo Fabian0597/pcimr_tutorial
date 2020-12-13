@@ -76,20 +76,15 @@ class Localization_Node:
 		
 		# initialize map of uniform probabilities the first time the robot receives a message on /map topic
 		if self.receive_map_data == 0:
-			self.prob_pos = np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height)
+			self.prob_pos = np.transpose(np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height))
 			self.prob_pos = self.prob_pos.astype('float64')
 			valid_states=len(self.prob_pos[self.prob_pos == 0])
 			self.prob_pos[self.prob_pos == 0]=1/valid_states
 			self.prob_pos[self.prob_pos == 100] = 0
 			self.prob_pos[self.prob_pos == -1] = 0
 			
-			self.prob_pos_scan = np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height)
-			self.prob_pos_scan = self.prob_pos_scan.astype('float64')
-			self.prob_pos_scan[self.prob_pos_scan == 0]=1/valid_states
-			self.prob_pos_scan[self.prob_pos_scan == 100] = 0
-			self.prob_pos_scan[self.prob_pos_scan == -1] = 0
+			self.map = np.transpose(np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height))
 			
-			self.map = np.asarray(data.data, dtype=np.int8).reshape(data.info.width, data.info.height)
 			
 			self.receive_map_data = 1
 			
@@ -101,19 +96,19 @@ class Localization_Node:
 		# int values for scan
 		scan=[round(x) for x in data.ranges]
 		
-		directions = [(-1,0), (0,-1), (1,0), (0,1)]
+		directions = [(0, -1), (-1, 0), (0, 1), (1, 0)]
 		
 		#wait until map received
 		if self.receive_map_data == 0:
 			return
 		
-		#iterate through rows
-		for i in range(np.shape(self.prob_pos_scan)[0]):
-			#iterate through collumns
-			for j in range(np.shape(self.prob_pos_scan)[1]):
+		#iterate through rows (x)
+		for x in range(np.shape(self.prob_pos)[0]):
+			#iterate through collumns (y)
+			for y in range(np.shape(self.prob_pos)[1]):
 			
 				#calculate probabilities for valid states
-				if self.map[i][j] == 100 or self.map[i][j] == -1:
+				if self.map[x][y] == 100 or self.map[x][y] == -1:
 					continue
 					
 				#initialize prob
@@ -123,35 +118,29 @@ class Localization_Node:
 				for u in range(len(directions)):
 					
 					#check if state in distance of laserscan is in grid world 20x20
-					if (i+directions[u][0]*scan[u]) >= 0 and (i+directions[u][0]*scan[u]) < 20 and (j+directions[u][1]*scan[u]) >= 0 and (j+directions[u][1]*scan[u]) < 20:
+					if (x+directions[u][0]*scan[u]) >= 0 and (x+directions[u][0]*scan[u]) < 20 and (y+directions[u][1]*scan[u]) >= 0 and (y+directions[u][1]*scan[u]) < 20 and((self.map[x+directions[u][0]*scan[u]][y+directions[u][1]*scan[u]] == 100) or (8 < y < 12 and (x+directions[u][0]*scan[u] == -1 or x+directions[u][0]*scan[u] == 20))):
 					
-						#check if state in distance of laserscan is a wall
-						if self.map[i+directions[u][0]*scan[u]][j+directions[u][1]*scan[u]] == 100:
-						
-							prob=prob*self.sensing_prob[0]
+						prob=prob*self.sensing_prob[0]
 					
 					#check if state in distance of laserscan+1 is in grid world 20x20		
-					elif (i+directions[u][0]*(scan[u]+1)) >= 0 and (i+directions[u][0]*(scan[u]+1)) < 20 and (j+directions[u][1]*(scan[u]+1)) >= 0 and (j+directions[u][1]*(scan[u]+1)) < 20:
-						#check if state in distance of laserscan+1 is a wall
-						if self.map[i+directions[u][0]*(scan[u]+1)][j+directions[u][1]*(scan[u]+1)] == 100:
+					elif (x+directions[u][0]*(scan[u]+1)) >= 0 and (x+directions[u][0]*(scan[u]+1)) < 20 and (y+directions[u][1]*(scan[u]+1)) >= 0 and (y+directions[u][1]*(scan[u]+1)) < 20 and ((self.map[x+directions[u][0]*(scan[u]+1)][y+directions[u][1]*(scan[u]+1)] == 100) or (8 < y < 12 and (x+directions[u][0]*(scan[u]+1) == -1 or x+directions[u][0]*(scan[u]+1) == 20))):
 						
-							prob=prob*self.sensing_prob[1]
+						prob=prob*self.sensing_prob[1]
 							
 					
 					#check if state in distance of laserscan-1 is in grid world 20x20		
-					elif (i+directions[u][0]*(scan[u]-1)) >= 0 and (i+directions[u][0]*(scan[u]-1)) < 20 and (j+directions[u][1]*(scan[u]-1)) >= 0 and (j+directions[u][1]*(scan[u]-1)) < 20:
-						#check if state in distance of laserscan-1 is a wall
-						if self.map[i+directions[u][0]*(scan[u]-1)][j+directions[u][1]*(scan[u]-1)] == 100:
+					elif (x+directions[u][0]*(scan[u]-1)) >= 0 and (x+directions[u][0]*(scan[u]-1)) < 20 and (y+directions[u][1]*(scan[u]-1)) >= 0 and (y+directions[u][1]*(scan[u]-1)) < 20 and ((self.map[x+directions[u][0]*(scan[u]-1)][y+directions[u][1]*(scan[u]-1)] == 100) or (8 < y < 12 and (x+directions[u][0]*(scan[u]-1) == -1 or x+directions[u][0]*(scan[u]-1) == 20))):
 						
-							prob=prob*self.sensing_prob[1]
+						prob=prob*self.sensing_prob[1]
+							
 					else:
-						prob=0
+						prob=prob*0.001
 							
 				#update map
-				self.prob_pos_scan[i][j]=prob
+				self.prob_pos[x][y]=prob
 				
 		#normalize probabilities
-		self.prob_pos=self.prob_pos*self.prob_pos_scan*(1/(sum(sum(self.prob_pos*self.prob_pos_scan))))
+		self.prob_pos /= sum(sum(self.prob_pos))
 				
 	
 	
@@ -171,28 +160,29 @@ class Localization_Node:
 		S.data= "S"
 		W.data= "W"
 		
-		prob_map=self.prob_pos
-	
+		prob_map=np.copy(self.prob_pos)
+		
+		
 		if data == N:
-			a_00 = (1,0)
-			a_minus_90 = (0,-1)
+			a_00 = (0, 1)
+			a_minus_90 = (-1, 0)
 		elif data == E:
-			a_00 = (0,1)
-			a_minus_90 = (1,0)
+			a_00 = (1, 0)
+			a_minus_90 = (0, 1)
 		elif data == S:
-			a_00 = (-1,0)
-			a_minus_90 = (0,1)
+			a_00 = (0, -1)
+			a_minus_90 = (1, 0)
 		elif data == W:
-			a_00 = (0,-1)
-			a_minus_90 = (-1,0)
+			a_00 = (-1, 0)
+			a_minus_90 = (0, -1)
 		
 		
 		#iterate throuh rows
-		for i in range(np.shape(self.prob_pos)[0]):
+		for x in range(np.shape(self.prob_pos)[0]):
 			#iterate throuh collumns
-			for j in range(np.shape(self.prob_pos)[1]):
+			for y in range(np.shape(self.prob_pos)[1]):
 				#check if state is a valid state
-				if self.map[i][j] == 100 or self.map[i][j] == -1:
+				if self.map[x][y] == 100 or self.map[x][y] == -1:
 					continue
 
 				
@@ -202,37 +192,29 @@ class Localization_Node:
 				#add probabilities for all 5 possible previous states * corresponding transition probability
 				
 				#coming from state_t-1 to state t in move direction
-				if (i-a_00[0]) >= 0 and (i-a_00[0]) < 20 and (j-a_00[1]) >= 0 and (j-a_00[1]) < 20:
-					#check if state t-1 is wall or empty space
-					if self.map[i-a_00[0]][j-a_00[1]] != -1 or self.map[i-a_00[0]][j-a_00[1]] != 100:
-						prob=prob+self.action_prob[0]*self.prob_pos[i-a_00[0]][j-a_00[1]]
+				if (x-a_00[0]) >= 0 and (x-a_00[0]) < 20 and (y-a_00[1]) >= 0 and (y-a_00[1]) < 20 and (self.map[x-a_00[0]][y-a_00[1]] != -1 or self.map[x-a_00[0]][y-a_00[1]] != 100):
+					prob=prob+self.action_prob[0]*self.prob_pos[x-a_00[0]][y-a_00[1]]
 					 
 				#coming from state_t-1 to state t in move direction -90
-				if (i-a_minus_90[0]) >= 0 and (i-a_minus_90[0]) < 20 and (j-a_minus_90[1]) >= 0 and (j-a_minus_90[1]) < 20:
-					#check if state t-1 is wall or empty space
-					if self.map[i-a_minus_90[0]][j-a_minus_90[1]] != -1 or self.map[i-a_minus_90[0]][j-a_minus_90[1]] != 100:
-						prob=prob+self.action_prob[1]*self.prob_pos[i-a_minus_90[0]][j-a_minus_90[1]]
+				if (x-a_minus_90[0]) >= 0 and (x-a_minus_90[0]) < 20 and (y-a_minus_90[1]) >= 0 and (y-a_minus_90[1]) < 20 and (self.map[x-a_minus_90[0]][y-a_minus_90[1]] != -1 or self.map[x-a_minus_90[0]][y-a_minus_90[1]] != 100):
+					prob=prob+self.action_prob[1]*self.prob_pos[x-a_minus_90[0]][y-a_minus_90[1]]
 
 				#coming from state_t-1 to state t in move direction +90
-				if (i+a_minus_90[0]) >= 0 and (i+a_minus_90[0]) < 20 and (j+a_minus_90[1]) >= 0 and (j+a_minus_90[1]) < 20:
-					#check if state t-1 is wall or empty space
-					if self.map[i+a_minus_90[0]][j+a_minus_90[1]] != -1 or self.map[i+a_minus_90[0]][j+a_minus_90[1]] != 100:
-						prob=prob+self.action_prob[2]*self.prob_pos[i+a_minus_90[0]][j+a_minus_90[1]]
+				if (x+a_minus_90[0]) >= 0 and (x+a_minus_90[0]) < 20 and (y+a_minus_90[1]) >= 0 and (y+a_minus_90[1]) < 20 and (self.map[x+a_minus_90[0]][y+a_minus_90[1]] != -1 or self.map[x+a_minus_90[0]][y+a_minus_90[1]] != 100):
+					prob=prob+self.action_prob[2]*self.prob_pos[x+a_minus_90[0]][y+a_minus_90[1]]
 					 			 
 				#coming from state_t-1 to state t in move direction +180
-				if (i+a_00[0]) >= 0 and (i+a_00[0]) < 20 and (j+a_00[1]) >= 0 and (j+a_00[1]) < 20:
-					#check if state t-1 is wall or empty space
-					if self.map[i+a_00[0]][j+a_00[1]] != -1 or self.map[i+a_00[0]][j+a_00[1]] != 100:
-					 prob=prob+self.action_prob[3]*self.prob_pos[i+a_00[0]][j+a_00[1]]
+				if (x+a_00[0]) >= 0 and (x+a_00[0]) < 20 and (y+a_00[1]) >= 0 and (y+a_00[1]) < 20 and (self.map[x+a_00[0]][y+a_00[1]] != -1 or self.map[x+a_00[0]][y+a_00[1]] != 100):
+					prob=prob+self.action_prob[3]*self.prob_pos[x+a_00[0]][y+a_00[1]]
 					 
 				#stay in position
-				prob=prob+self.action_prob[4]*self.prob_pos[i][j]
+				prob=prob+self.action_prob[4]*self.prob_pos[x][y]
 				
 				#update map of probabily for this timestep without changing probabilities which are still used in this time step
-				prob_map[i][j] = prob
+				prob_map[x][y] = prob
 			
 		#update map of probability	
-		self.prob_pos=prob_map
+		self.prob_pos=np.copy(prob_map)
 
 		
 	
@@ -242,11 +224,10 @@ class Localization_Node:
 	
 			#calcluate most likely position
 			max_prob = np.where(self.prob_pos == self.prob_pos.max())
-			
-			# pick random position if there are several most likely position
 			pick = random.choice(range(len(max_prob[1])))
-			x_pos = max_prob[1][pick]
-			y_pos = max_prob[0][pick]
+			x_pos = max_prob[0][pick]
+			y_pos = max_prob[1][pick]
+			
 			
 			#publish position
 			point = Point()
@@ -261,7 +242,7 @@ class Localization_Node:
 			self.pub_pos_marker.publish(self.msg_pos_marker)
 				
 			#publish map
-			prob_pos_print = self.prob_pos
+			prob_pos_print = np.transpose(self.prob_pos)
 			prob_pos_print = prob_pos_print*100
 			prob_pos_print = prob_pos_print.astype(int)
 			self.msg_map.data = tuple(prob_pos_print.ravel())
@@ -270,7 +251,7 @@ class Localization_Node:
 
 		
 	def run(self):
-		rate = rospy.Rate(10)
+		rate = rospy.Rate(1)
 		while not rospy.is_shutdown():
 			#keeps node from exiting until the node has been shutdown.
 			self.publish()
