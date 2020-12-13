@@ -20,6 +20,11 @@ class Localization_Node:
 	def __init__(self):
 		#robot_variable
 		
+		#remember last pos
+		self.last_pos = None
+		self.pos = None
+		
+		# notices whether it received map earlier
 		self.receive_map_data=0
 		
 		#input probabilities
@@ -192,19 +197,19 @@ class Localization_Node:
 				#add probabilities for all 5 possible previous states * corresponding transition probability
 				
 				#coming from state_t-1 to state t in move direction
-				if (x-a_00[0]) >= 0 and (x-a_00[0]) < 20 and (y-a_00[1]) >= 0 and (y-a_00[1]) < 20 and (self.map[x-a_00[0]][y-a_00[1]] != -1 or self.map[x-a_00[0]][y-a_00[1]] != 100):
+				if (x-a_00[0]) >= 0 and (x-a_00[0]) < 20 and (y-a_00[1]) >= 0 and (y-a_00[1]) < 20 and self.map[x-a_00[0]][y-a_00[1]] == 0:
 					prob=prob+self.action_prob[0]*self.prob_pos[x-a_00[0]][y-a_00[1]]
 					 
 				#coming from state_t-1 to state t in move direction -90
-				if (x-a_minus_90[0]) >= 0 and (x-a_minus_90[0]) < 20 and (y-a_minus_90[1]) >= 0 and (y-a_minus_90[1]) < 20 and (self.map[x-a_minus_90[0]][y-a_minus_90[1]] != -1 or self.map[x-a_minus_90[0]][y-a_minus_90[1]] != 100):
+				if (x-a_minus_90[0]) >= 0 and (x-a_minus_90[0]) < 20 and (y-a_minus_90[1]) >= 0 and (y-a_minus_90[1]) < 20 and self.map[x-a_minus_90[0]][y-a_minus_90[1]] == 0:
 					prob=prob+self.action_prob[1]*self.prob_pos[x-a_minus_90[0]][y-a_minus_90[1]]
 
 				#coming from state_t-1 to state t in move direction +90
-				if (x+a_minus_90[0]) >= 0 and (x+a_minus_90[0]) < 20 and (y+a_minus_90[1]) >= 0 and (y+a_minus_90[1]) < 20 and (self.map[x+a_minus_90[0]][y+a_minus_90[1]] != -1 or self.map[x+a_minus_90[0]][y+a_minus_90[1]] != 100):
+				if (x+a_minus_90[0]) >= 0 and (x+a_minus_90[0]) < 20 and (y+a_minus_90[1]) >= 0 and (y+a_minus_90[1]) < 20 and self.map[x+a_minus_90[0]][y+a_minus_90[1]] == 0:
 					prob=prob+self.action_prob[2]*self.prob_pos[x+a_minus_90[0]][y+a_minus_90[1]]
 					 			 
 				#coming from state_t-1 to state t in move direction +180
-				if (x+a_00[0]) >= 0 and (x+a_00[0]) < 20 and (y+a_00[1]) >= 0 and (y+a_00[1]) < 20 and (self.map[x+a_00[0]][y+a_00[1]] != -1 or self.map[x+a_00[0]][y+a_00[1]] != 100):
+				if (x+a_00[0]) >= 0 and (x+a_00[0]) < 20 and (y+a_00[1]) >= 0 and (y+a_00[1]) < 20 and self.map[x+a_00[0]][y+a_00[1]] == 0:
 					prob=prob+self.action_prob[3]*self.prob_pos[x+a_00[0]][y+a_00[1]]
 					 
 				#stay in position
@@ -224,21 +229,35 @@ class Localization_Node:
 	
 			#calcluate most likely position
 			max_prob = np.where(self.prob_pos == self.prob_pos.max())
-			pick = random.choice(range(len(max_prob[1])))
+
+			
+			if self.last_pos is not None:
+				#self.last_pos = np.where(max_prob == sum(max_prob-self.last_pos).min())
+				pick = 10000
+				for i in range(np.shape(max_prob)[1]):
+					if (max_prob[0][i]-self.last_pos[0] + max_prob[1][i]-self.last_pos[1]) <= pick:
+						pick = i
+				
+					
+			else:
+				pick = random.choice(range(len(max_prob[1])))
+				
 			x_pos = max_prob[0][pick]
 			y_pos = max_prob[1][pick]
+			self.last_pos = np.array([x_pos, y_pos])
+			self.pos = np.array([x_pos, y_pos])
 			
 			
 			#publish position
 			point = Point()
-			point.x=x_pos
-			point.y=y_pos
+			point.x=self.pos[0]
+			point.y=self.pos[1]
 			point.z=0
 			self.pub_pos.publish(point)
 			
 			#publish Marker
-			self.msg_pos_marker.pose.position.x = x_pos+0.5
-			self.msg_pos_marker.pose.position.y = y_pos+0.5
+			self.msg_pos_marker.pose.position.x = self.pos[0]+0.5
+			self.msg_pos_marker.pose.position.y = self.pos[1]+0.5
 			self.pub_pos_marker.publish(self.msg_pos_marker)
 				
 			#publish map
